@@ -188,6 +188,16 @@ func IngestFeeds(ctx context.Context, client *mta.Client, cfg *config.Config) Tr
 	trainPositions := make([]VehicleMarker, 0, 64)
 	trackedKeys := make(map[string]bool)
 
+	// Map live vehicle positions by TripID to match with TripUpdates
+	vehicleByTrip := make(map[string]*gtfs.VehiclePosition)
+	if lFeed != nil {
+		for _, entity := range lFeed.Entity {
+			if v := entity.Vehicle; v != nil && v.Trip != nil {
+				vehicleByTrip[v.Trip.GetTripId()] = v
+			}
+		}
+	}
+
 	// Process L Feed entities
 	if lFeed != nil {
 		for _, entity := range lFeed.Entity {
@@ -248,6 +258,39 @@ func IngestFeeds(ctx context.Context, client *mta.Client, cfg *config.Config) Tr
 					routeID = "L"
 				}
 
+				// Determine true dynamic terminus from final StopTimeUpdate
+				destName := "8 Av (Manhattan)"
+				if len(tu.StopTimeUpdate) > 0 {
+					lastStopID := tu.StopTimeUpdate[len(tu.StopTimeUpdate)-1].GetStopId()
+					cleanLastID := lastStopID
+					if len(cleanLastID) > 3 {
+						cleanLastID = cleanLastID[:3]
+					}
+					if name, ok := LStationNames[cleanLastID]; ok {
+						destName = name
+					} else if strings.HasSuffix(lastStopID, "S") {
+						destName = "Rockaway Pkwy"
+					}
+				}
+
+				// Check live physical train location if vehicle beacon is active
+				var liveLoc string
+				if veh, ok := vehicleByTrip[trip.GetTripId()]; ok {
+					vehStop := veh.GetStopId()
+					if len(vehStop) > 3 {
+						vehStop = vehStop[:3]
+					}
+					stName := LStationNames[vehStop]
+					if stName == "" {
+						stName = vehStop
+					}
+					if veh.CurrentStatus != nil && *veh.CurrentStatus == gtfs.VehiclePosition_STOPPED_AT {
+						liveLoc = "At " + stName
+					} else {
+						liveLoc = "In transit to " + stName
+					}
+				}
+
 				for _, stu := range tu.StopTimeUpdate {
 					sid := stu.GetStopId()
 					if sid == cfg.StopBedfordN || sid == cfg.StopBedfordS {
@@ -266,24 +309,25 @@ func IngestFeeds(ctx context.Context, client *mta.Client, cfg *config.Config) Tr
 							minsAway := secsAway / 60
 							isNorth := sid == cfg.StopBedfordN
 
-							curStatus := "In transit to Bedford"
-							if secsAway <= 45 {
-								curStatus = "Entering Bedford Av"
-							} else if secsAway <= 110 {
-								curStatus = "Approaching Bedford Av"
-							} else if len(tu.StopTimeUpdate) > 0 {
-								firstID := tu.StopTimeUpdate[0].GetStopId()
-								if len(firstID) > 3 {
-									firstID = firstID[:3]
+							curStatus := liveLoc
+							if curStatus == "" {
+								if secsAway <= 45 {
+									curStatus = "At Bedford Av"
+								} else if secsAway <= 110 {
+									curStatus = "Approaching Bedford Av"
+								} else if len(tu.StopTimeUpdate) > 0 {
+									firstID := tu.StopTimeUpdate[0].GetStopId()
+									if len(firstID) > 3 {
+										firstID = firstID[:3]
+									}
+									if name, ok := LStationNames[firstID]; ok {
+										curStatus = "At " + name
+									} else {
+										curStatus = "In transit"
+									}
+								} else {
+									curStatus = "In transit"
 								}
-								if name, ok := LStationNames[firstID]; ok {
-									curStatus = "At " + name
-								}
-							}
-
-							dest := "8 Av (Manhattan)"
-							if !isNorth {
-								dest = "Rockaway Pkwy (Canarsie)"
 							}
 
 							dir := "N"
@@ -294,7 +338,7 @@ func IngestFeeds(ctx context.Context, client *mta.Client, cfg *config.Config) Tr
 							dep := TrainDeparture{
 								RouteID:       routeID,
 								Direction:     dir,
-								Destination:   dest,
+								Destination:   destName,
 								MinutesAway:   minsAway,
 								SecondsAway:   secsAway,
 								ArrivalTime:   time.Unix(arrTime, 0),
@@ -376,9 +420,10 @@ func IngestFeeds(ctx context.Context, client *mta.Client, cfg *config.Config) Tr
 	processFeedVehicles(numFeed, "1")
 	processFeedVehicles(nqrwFeed, "N")
 
-	// Parse Alerts
+	// Parse Alerts, filtering strictly for active now
 	alerts := make([]TransitAlert, 0, 4)
 	if alertsFeed != nil {
+		nowUnix := now.Unix()
 		for _, e := range alertsFeed.Entity {
 			if a := e.Alert; a != nil {
 				affectsL := false
@@ -389,6 +434,20 @@ func IngestFeeds(ctx context.Context, client *mta.Client, cfg *config.Config) Tr
 					}
 				}
 				if affectsL {
+					// Check if this alert is active right now
+					activeNow := len(a.ActivePeriod) == 0
+					for _, ap := range a.ActivePeriod {
+						start := int64(ap.GetStart())
+						end := int64(ap.GetEnd())
+						if (start == 0 || start <= nowUnix) && (end == 0 || end >= nowUnix) {
+							activeNow = true
+							break
+						}
+					}
+					if !activeNow {
+						continue
+					}
+
 					summary := "Service Advisory"
 					if a.HeaderText != nil && len(a.HeaderText.Translation) > 0 {
 						summary = a.HeaderText.Translation[0].GetText()
@@ -398,7 +457,7 @@ func IngestFeeds(ctx context.Context, client *mta.Client, cfg *config.Config) Tr
 						desc = a.DescriptionText.Translation[0].GetText()
 					}
 					sev := "INFO"
-					if strings.Contains(strings.ToLower(summary), "suspend") || strings.Contains(strings.ToLower(summary), "no trains") {
+					if strings.Contains(strings.ToLower(summary), "suspend") || strings.Contains(strings.ToLower(summary), "no trains") || strings.Contains(strings.ToLower(summary), "no [l]") {
 						sev = "CRITICAL"
 					} else if strings.Contains(strings.ToLower(summary), "delay") || strings.Contains(strings.ToLower(summary), "work") {
 						sev = "WARNING"
