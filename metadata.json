@@ -1,0 +1,6 @@
+{
+  "name": "subway-crt: NYC Subway Real-Time Tracker & System Map",
+  "description": "Autonomous retro-futuristic CRT departure board for Bedford Ave (L) paired with an animated schematic transit map of Manhattan and North Brooklyn.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

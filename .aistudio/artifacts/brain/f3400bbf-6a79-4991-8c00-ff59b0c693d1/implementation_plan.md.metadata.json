@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for subway-crt: an authentic retro CRT transit kiosk for Bedford Ave (L) pairing real-time departure countdowns and an animated vector schematic map of Manhattan and North Brooklyn transit lines, backed by dual-mode MTA GTFS-RT ingestion and bundled with a complete Raspberry Pi 3B Go/Charm TUI source exporter.",
+  "updatedAt":  "2026-10-10T18:36:39.871283425Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

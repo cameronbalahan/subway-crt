@@ -1,0 +1,13 @@
+{
+  "name": "subway-crt",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "go run cmd/subway-crt/main.go",
+    "build": "go build -o bin/subway-crt cmd/subway-crt/main.go",
+    "start": "./bin/subway-crt",
+    "clean": "rm -rf bin",
+    "lint": "go vet ./... && go test ./..."
+  }
+}
