@@ -201,17 +201,34 @@ func (s *Server) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
 
 	// Add README.md
 	if f, err := zw.Create("README.md"); err == nil {
-		readme := `# subway-crt: Pure Go NYC Subway Departure Board & Schematic Map
-
-An autonomous, retro-futuristic CRT departure board and live animated transit schematic for the Bedford Ave (L) station. Built exclusively in Pure Go with Charm Bracelet libraries (Bubble Tea, Lip Gloss) and native GTFS-Realtime Protobuf feeds.
-
-## Hardware Target
-Raspberry Pi 3 Model B, 64-bit Raspberry Pi OS Lite, /dev/tty1 direct console.
-
-## Building & Running
-go build -o subway-crt cmd/subway-crt/main.go
-./subway-crt
-`
+		readme := "# subway-crt: Pure Go NYC Subway Departure Board & Schematic Map\n\n" +
+			"An autonomous, retro-futuristic CRT departure board and live animated transit schematic for the Bedford Ave (L) station. Built exclusively in Pure Go with Charm Bracelet libraries (Bubble Tea, Lip Gloss) and native GTFS-Realtime Protobuf feeds.\n\n" +
+			"## Hardware Target\n" +
+			"Raspberry Pi (3B / 4 / 5 / Zero 2W), connected to CRT / HDMI display or /dev/tty1 direct console.\n\n" +
+			"## Fixing \"Exec format error\" on Raspberry Pi\n" +
+			"If running the binary gives **\"Exec format error\"**, your Raspberry Pi is running a **32-bit OS** (e.g. standard Raspberry Pi OS 32-bit / `armv7l`).\n\n" +
+			"Check your Pi's kernel architecture by running:\n" +
+			"```bash\n" +
+			"uname -m\n" +
+			"```\n" +
+			"- If output is **`aarch64`**: Run `./subway-crt-arm64` (64-bit)\n" +
+			"- If output is **`armv7l`** or **`armv6l`**: Run `./subway-crt-armv7` (32-bit)\n\n" +
+			"## Cross-Compiling for Raspberry Pi\n" +
+			"```bash\n" +
+			"# Build 64-bit ARM (Raspberry Pi OS 64-bit / aarch64)\n" +
+			"make build-arm64\n\n" +
+			"# Build 32-bit ARM (Raspberry Pi OS 32-bit / armv7l)\n" +
+			"make build-armv7\n\n" +
+			"# Or build both automatically:\n" +
+			"./scripts/build-arm64.sh\n" +
+			"```\n\n" +
+			"## Running on the Pi\n" +
+			"```bash\n" +
+			"# On 64-bit OS:\n" +
+			"./subway-crt-arm64\n\n" +
+			"# On 32-bit OS:\n" +
+			"./subway-crt-armv7\n" +
+			"```\n"
 		f.Write([]byte(readme))
 	}
 
