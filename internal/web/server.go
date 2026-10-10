@@ -8,8 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime"
-	"strings"
 	"sync"
 
 	"subway-crt/internal/transit"
@@ -21,7 +19,6 @@ type Server struct {
 	currentFrame string
 	snapshot     transit.TransitSnapshot
 	listeners    map[chan string]bool
-	themeChan    chan string
 }
 
 func NewServer(port string) *Server {
@@ -31,13 +28,7 @@ func NewServer(port string) *Server {
 	return &Server{
 		port:      port,
 		listeners: make(map[chan string]bool),
-		themeChan: make(chan string, 16),
 	}
-}
-
-// ThemeChan returns a channel that emits theme switches from the web UI
-func (s *Server) ThemeChan() <-chan string {
-	return s.themeChan
 }
 
 // UpdateFrame updates the latest rendered Lip Gloss ANSI frame and broadcasts to web clients
@@ -73,10 +64,7 @@ func (s *Server) Start() error {
 	// 4. Transit Snapshot JSON API
 	mux.HandleFunc("/api/transit/snapshot", s.handleSnapshot)
 
-	// 5. Theme Switch Endpoint
-	mux.HandleFunc("/api/theme", s.handleSetTheme)
-
-	// 6. Pure Go Zip Codebase Downloader
+	// 5. Pure Go Zip Codebase Downloader
 	mux.HandleFunc("/api/download/codebase.zip", s.handleDownloadZip)
 
 	server := &http.Server{
@@ -89,21 +77,7 @@ func (s *Server) Start() error {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	goVer := strings.TrimPrefix(runtime.Version(), "go")
-	html := strings.ReplaceAll(crtHTMLTemplate, "{{GO_VERSION}}", "Go "+goVer)
-	w.Write([]byte(html))
-}
-
-func (s *Server) handleSetTheme(w http.ResponseWriter, r *http.Request) {
-	theme := r.URL.Query().Get("set")
-	if theme != "" {
-		select {
-		case s.themeChan <- theme:
-		default:
-		}
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	w.Write([]byte(crtHTMLTemplate))
 }
 
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +173,6 @@ func (s *Server) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Add README.md
 	if f, err := zw.Create("README.md"); err == nil {
 		readme := "# subway-crt: Pure Go NYC Subway Departure Board & Schematic Map\n\n" +
 			"An autonomous, retro-futuristic CRT departure board and live animated transit schematic for the Bedford Ave (L) station. Built exclusively in Pure Go with Charm Bracelet libraries (Bubble Tea, Lip Gloss) and native GTFS-Realtime Protobuf feeds.\n\n" +
@@ -249,25 +222,22 @@ const crtHTMLTemplate = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>subway-crt: NYC Subway Real-Time Tracker &amp; System Map (Pure Go / Charm TUI)</title>
+  <title>subway-crt: NYC Subway Real-Time Tracker &amp; System Map (Amber Monochrome CRT)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;700;800&family=VT323&display=swap" rel="stylesheet">
   <style>
     :root {
-      --crt-pink: #FF007F;
-      --crt-cyan: #00E5FF;
-      --crt-yellow: #FFE600;
-      --crt-violet: #9D00FF;
-      --crt-green: #00FF66;
       --crt-amber: #FFB000;
-      --crt-bg: #07070F;
-      --theme-color: #00E5FF;
-      --glow-color: rgba(0, 229, 255, 0.45);
+      --crt-amber-dim: #805300;
+      --crt-amber-bright: #FFE066;
+      --crt-bg: #0C0802;
+      --theme-color: #FFB000;
+      --glow-color: rgba(255, 176, 0, 0.45);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background: #040408;
+      background: #040301;
       color: var(--theme-color);
       font-family: 'Share Tech Mono', 'JetBrains Mono', monospace;
       overflow: hidden;
@@ -277,41 +247,41 @@ const crtHTMLTemplate = `<!DOCTYPE html>
       user-select: none;
     }
 
-    /* Outrun Synthwave Bezel Frame */
+    /* Amber Monochrome CRT Bezel Frame - Wide 1080p geometry */
     .crt-bezel {
       flex: 1;
       position: relative;
       margin: 8px 10px 4px 10px;
-      border: 5px solid #18122B;
-      border-radius: 14px;
+      border: 5px solid #2B1D05;
+      border-radius: 12px;
       background: var(--crt-bg);
       box-shadow: 
         inset 0 0 100px rgba(0, 0, 0, 0.95),
-        0 0 0 1px #2E1A47,
-        0 0 35px rgba(157, 0, 255, 0.25),
-        0 0 15px rgba(255, 0, 127, 0.2);
+        0 0 0 1px #4A320A,
+        0 0 35px rgba(255, 176, 0, 0.2),
+        0 0 15px rgba(255, 150, 0, 0.15);
       overflow: hidden;
       display: flex;
       flex-direction: column;
     }
 
-    /* Outrun Scanlines */
+    /* Amber Scanlines */
     .crt-scanlines {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: linear-gradient(rgba(18, 16, 26, 0) 50%, rgba(0, 0, 0, 0.42) 50%),
-                  linear-gradient(90deg, rgba(255, 0, 127, 0.03), rgba(0, 229, 255, 0.02), rgba(157, 0, 255, 0.03));
+      background: linear-gradient(rgba(18, 12, 2, 0) 50%, rgba(0, 0, 0, 0.45) 50%),
+                  linear-gradient(90deg, rgba(255, 176, 0, 0.02), rgba(0, 0, 0, 0), rgba(255, 176, 0, 0.02));
       background-size: 100% 3px, 6px 100%;
       pointer-events: none;
       z-index: 40;
-      opacity: 0.9;
+      opacity: 0.88;
     }
 
     /* Phosphor screen curvature vignette */
     .crt-vignette {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: radial-gradient(circle at center, transparent 60%, rgba(4, 4, 10, 0.8) 100%);
+      background: radial-gradient(circle at center, transparent 65%, rgba(6, 4, 1, 0.85) 100%);
       pointer-events: none;
       z-index: 41;
     }
@@ -320,41 +290,41 @@ const crtHTMLTemplate = `<!DOCTYPE html>
     .crt-glare {
       position: absolute;
       top: 0; left: 0; right: 0; height: 35%;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 100%);
+      background: linear-gradient(180deg, rgba(255, 200, 100, 0.03) 0%, rgba(255, 200, 100, 0) 100%);
       pointer-events: none;
       z-index: 42;
     }
 
-    /* Terminal Output Container */
+    /* Terminal Output Container - Spanning Full 1080p Width */
     #terminal-display {
       flex: 1;
-      padding: 14px 20px;
-      font-size: 13.5px;
-      line-height: 1.28;
+      padding: 12px 18px;
+      font-size: 12.8px;
+      line-height: 1.25;
       white-space: pre;
       overflow: auto;
-      text-shadow: 0 0 5px var(--glow-color), 0 0 12px var(--glow-color);
+      text-shadow: 0 0 5px var(--glow-color), 0 0 10px var(--glow-color);
       font-weight: 600;
       z-index: 10;
     }
 
-    /* Synthwave Control Bar */
+    /* Minimal Clean Footer Bar */
     .crt-footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 7px 16px;
-      background: #080712;
-      border-top: 1px solid rgba(157, 0, 255, 0.3);
+      padding: 6px 16px;
+      background: #0C0802;
+      border-top: 1px solid rgba(255, 176, 0, 0.25);
       font-size: 11.5px;
       z-index: 50;
     }
 
     .btn {
-      background: #120F24;
-      color: #9D9DAF;
-      border: 1px solid #2B2547;
-      padding: 5px 12px;
+      background: #1A1104;
+      color: #C28915;
+      border: 1px solid #4D3409;
+      padding: 4px 12px;
       border-radius: 4px;
       font-family: inherit;
       font-size: 11px;
@@ -364,55 +334,18 @@ const crtHTMLTemplate = `<!DOCTYPE html>
       letter-spacing: 0.5px;
     }
     .btn:hover {
-      background: #1E193B;
-      color: #FFF;
-      border-color: var(--crt-cyan);
-      box-shadow: 0 0 10px rgba(0, 229, 255, 0.35);
-    }
-    .btn.active {
-      background: var(--crt-pink);
-      color: #FFF;
-      border-color: var(--crt-pink);
-      box-shadow: 0 0 12px rgba(255, 0, 127, 0.6);
-    }
-    .btn.active-cyan {
-      background: var(--crt-cyan);
-      color: #000;
-      border-color: var(--crt-cyan);
-      box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
-    }
-    .btn.active-green {
-      background: var(--crt-green);
-      color: #000;
-      border-color: var(--crt-green);
-      box-shadow: 0 0 12px rgba(0, 255, 102, 0.6);
-    }
-    .btn.active-amber {
-      background: var(--crt-amber);
-      color: #000;
+      background: #2E1E05;
+      color: #FFE066;
       border-color: var(--crt-amber);
-      box-shadow: 0 0 12px rgba(255, 176, 0, 0.6);
-    }
-
-    .tag-purego {
-      background: #00ADD8;
-      color: #FFF;
-      padding: 2px 7px;
-      border-radius: 3px;
-      font-weight: 800;
-      font-size: 10px;
-      letter-spacing: 0.5px;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
+      box-shadow: 0 0 10px rgba(255, 176, 0, 0.35);
     }
 
     .live-dot {
-      width: 7px;
-      height: 7px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
-      background: #00FF66;
-      box-shadow: 0 0 8px #00FF66;
+      background: #FFB000;
+      box-shadow: 0 0 8px #FFB000;
       animation: pulse 1.8s infinite;
     }
     @keyframes pulse {
@@ -426,50 +359,24 @@ const crtHTMLTemplate = `<!DOCTYPE html>
     <div class="crt-glare"></div>
     <div class="crt-scanlines" id="scanlines-layer"></div>
     <div class="crt-vignette"></div>
-    <pre id="terminal-display">INITIALIZING SUBWAY-CRT (PURE GO + CHARM BRACELET ENGINE)...</pre>
+    <pre id="terminal-display">INITIALIZING SUBWAY-CRT (AMBER MONOCHROME P3 RADAR)...</pre>
   </div>
 
   <div class="crt-footer">
-    <div style="display:flex; gap:6px; align-items:center;">
-      <span style="color:#777; font-weight:bold; font-size:10px;">PALETTE:</span>
-      <button class="btn active" id="btn-outrun" onclick="setPalette('outrun', '#00E5FF')">⚡ SYNTHWAVE</button>
-      <button class="btn" id="btn-phosphor" onclick="setPalette('phosphor', '#00FF66')">P1 GREEN</button>
-      <button class="btn" id="btn-amber" onclick="setPalette('amber', '#FFB000')">P3 AMBER</button>
-    </div>
-
     <div style="display:flex; gap:8px; align-items:center;">
       <button class="btn" onclick="toggleScanlines()">SCANLINES: ON</button>
-      <button class="btn" onclick="toggleFullscreen()">⛶ 1080p KIOSK</button>
-      <a href="/api/download/codebase.zip" class="btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:5px; color:#00E5FF; border-color:#00E5FF;">
-        📥 DOWNLOAD PURE GO CODEBASE (.ZIP)
-      </a>
+      <button class="btn" onclick="toggleFullscreen()">⛶ 1080p FULLSCREEN</button>
     </div>
 
     <div style="display:flex; gap:10px; align-items:center;">
-      <span class="tag-purego">{{GO_VERSION}}</span>
-      <span style="color:#666; font-size:11px;">CHARM BUBBLE TEA</span>
-      <span class="live-dot" title="Live MTA GTFS-RT Streaming"></span>
+      <span style="color:#A67200; font-size:11px;">BEDFORD AV (L) PASSENGER RADAR</span>
+      <span class="live-dot" title="Live MTA GTFS-RT Active"></span>
     </div>
   </div>
 
   <script>
     const term = document.getElementById('terminal-display');
     const scanlines = document.getElementById('scanlines-layer');
-
-    function setPalette(name, glowHex) {
-      document.documentElement.style.setProperty('--theme-color', glowHex);
-      document.documentElement.style.setProperty('--glow-color', glowHex + '66');
-      document.querySelectorAll('#btn-outrun, #btn-phosphor, #btn-amber').forEach(b => {
-        b.className = 'btn';
-      });
-      const activeBtn = document.getElementById('btn-' + name);
-      if (activeBtn) {
-        if (name === 'outrun') activeBtn.className = 'btn active';
-        else if (name === 'phosphor') activeBtn.className = 'btn active-green';
-        else if (name === 'amber') activeBtn.className = 'btn active-amber';
-      }
-      fetch('/api/theme?set=' + name).catch(() => {});
-    }
 
     let scanlinesEnabled = true;
     function toggleScanlines() {
@@ -486,18 +393,14 @@ const crtHTMLTemplate = `<!DOCTYPE html>
       }
     }
 
-    // Comprehensive ANSI TrueColor parser converting Charm Lip Gloss SGR escapes to styled HTML
     function ansiToHtml(text) {
       if (!text) return '';
 
-      // Escape HTML special chars
       let s = text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-      // Parse ANSI escape sequences
-      // Matches \x1b[ ... m
       const ansiRegex = /\x1b\[([0-9;]*)m/g;
       let html = '';
       let lastIndex = 0;
@@ -511,7 +414,6 @@ const crtHTMLTemplate = `<!DOCTYPE html>
         const codes = match[1] ? match[1].split(';').map(Number) : [0];
 
         if (codes[0] === 0 || match[1] === '') {
-          // Reset
           while (activeSpans > 0) {
             html += '</span>';
             activeSpans--;
@@ -525,12 +427,10 @@ const crtHTMLTemplate = `<!DOCTYPE html>
               style += 'font-weight:800;';
               i++;
             } else if (c === 38 && codes[i+1] === 2) {
-              // 24-bit TrueColor Foreground: 38;2;R;G;B
               const r = codes[i+2], g = codes[i+3], b = codes[i+4];
               style += 'color:rgb(' + r + ',' + g + ',' + b + ');';
               i += 5;
             } else if (c === 48 && codes[i+1] === 2) {
-              // 24-bit TrueColor Background: 48;2;R;G;B
               const r = codes[i+2], g = codes[i+3], b = codes[i+4];
               style += 'background-color:rgb(' + r + ',' + g + ',' + b + ');';
               i += 5;
@@ -561,7 +461,6 @@ const crtHTMLTemplate = `<!DOCTYPE html>
       return html;
     }
 
-    // Connect to pure Go Server-Sent Events stream
     let eventSource;
     function connectStream() {
       eventSource = new EventSource('/stream');

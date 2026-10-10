@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"time"
 
@@ -19,19 +18,16 @@ type RootModel struct {
 	snapshotChan <-chan transit.TransitSnapshot
 	snapshot     transit.TransitSnapshot
 	lastTick     time.Time
-	currentTheme ThemeType
 	styles       Styles
 }
 
 func NewRootModel(snapshotChan <-chan transit.TransitSnapshot) RootModel {
-	theme := ThemeOutrun
 	return RootModel{
 		snapshotChan: snapshotChan,
-		width:        240,
-		height:       67,
+		width:        240, // 1080p full screen default width
+		height:       67,  // 1080p full screen default height
 		lastTick:     time.Now(),
-		currentTheme: theme,
-		styles:       MakeStyles(GetPalette(theme)),
+		styles:       MakeStyles(GetDefaultPalette()),
 	}
 }
 
@@ -47,17 +43,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "p", "tab":
-			// Cycle themes: Outrun -> Phosphor -> Amber -> Outrun
-			switch m.currentTheme {
-			case ThemeOutrun:
-				m.currentTheme = ThemePhosphor
-			case ThemePhosphor:
-				m.currentTheme = ThemeAmber
-			default:
-				m.currentTheme = ThemeOutrun
-			}
-			m.styles = MakeStyles(GetPalette(m.currentTheme))
 		}
 
 	case tea.WindowSizeMsg:
@@ -95,26 +80,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m RootModel) SetTheme(theme ThemeType) RootModel {
-	m.currentTheme = theme
-	m.styles = MakeStyles(GetPalette(theme))
-	return m
-}
-
 func (m RootModel) View() string {
 	w := m.width
-	if w < 100 {
-		w = 100
+	if w < 160 {
+		w = 160
 	}
 
-	// 1. Synthwave Command Center Header
+	// 1. Amber Monochrome CRT Command Center Header
 	nowStr := m.lastTick.Format("15:04:05")
 	feedMode := m.snapshot.FeedMode
 	if feedMode == "" {
 		feedMode = "LIVE_GTFS_RT"
 	}
 
-	kioskTitle := fmt.Sprintf(" ◆ SUBWAY-CRT // BEDFORD AV (L) 1080p RADAR // %s ", m.styles.Palette.Name)
+	kioskTitle := " ◆ SUBWAY-CRT // BEDFORD AV (L) 1080p RADAR // AMBER MONOCHROME P3 "
 	statusInfo := fmt.Sprintf(" [FEED: %s] [%s EST] ", feedMode, nowStr)
 
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -123,31 +102,25 @@ func (m RootModel) View() string {
 		m.styles.Clock.Render(statusInfo),
 	)
 
-	// 2. Top Half: Outrun Departure Board
+	// 2. Top Half: Widescreen Departure Board with fixed-width columns
 	topView := RenderDepartureBoard(w, m.snapshot, m.styles)
 
-	// 3. Neon Divider with cyber glyph accents
+	// 3. Amber Divider
 	divider := lipgloss.NewStyle().
 		Foreground(m.styles.Palette.Border).
 		Render("───◆ " + strings.Repeat("━", w-12) + " ◆───")
 
-	// 4. Bottom Half: Outrun Schematic Map
+	// 4. Bottom Half: Centered, widened Schematic Map
 	bottomView := RenderSchematicMap(w, m.height-18, m.snapshot, m.styles)
 
-	// 5. Interactive Outrun Keymap Footer
+	// 5. Clean Footer Bar (No palette changing, no engine credits)
 	badgeQuit := m.styles.KeyBadge.Render("q")
-	badgeTheme := m.styles.KeyBadge.Render("p / tab")
 	badgeKiosk := m.styles.KeyBadge.Render("1080p")
-	goVer := strings.TrimPrefix(runtime.Version(), "go")
-	badgePureGo := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#00ADD8")).Padding(0, 1).Render("Pure Go " + goVer)
 
 	footer := fmt.Sprintf(
-		"  %s Quit  ·  %s Palette (%s)  ·  %s Console  ·  %s  ·  Official MTA GTFS-RT Protobuf Engine · Charm Lip Gloss ",
+		"  %s Quit  ·  %s Console  ·  BEDFORD AV (L) PASSENGER RADAR KIOSK",
 		badgeQuit,
-		badgeTheme,
-		m.styles.Palette.Name,
 		badgeKiosk,
-		badgePureGo,
 	)
 	footerStyled := m.styles.FooterBar.Render(footer)
 

@@ -10,9 +10,10 @@ import (
 )
 
 // RenderDepartureBoard renders the top 1/3 Bedford Ave (L) commuter board
+// Optimized for wide 1080p full-screen display with rock-solid column alignment
 func RenderDepartureBoard(width int, snap transit.TransitSnapshot, styles Styles) string {
-	if width < 80 {
-		width = 80
+	if width < 120 {
+		width = 120
 	}
 
 	// 1. Critical Alert Banner or Status Line
@@ -48,43 +49,54 @@ func RenderDepartureBoard(width int, snap transit.TransitSnapshot, styles Styles
 	}
 
 	// 2. Split Track Departure Cards: Manhattan (Left) vs Canarsie (Right)
-	colWidth := (width - 8) / 2
-	if colWidth < 46 {
-		colWidth = 46
+	// Full wide screen spacing: split available width evenly with padding
+	cardWidth := (width - 8) / 2
+	if cardWidth < 68 {
+		cardWidth = 68
 	}
 
-	leftCol := renderRetroDepartureCard(
+	leftCol := renderFixedDepartureCard(
 		"▲ TRACK 1: MANHATTAN-BOUND // 8 AV TERMINUS",
 		snap.ManhattanTrains,
-		colWidth,
-		styles.Palette.Secondary,
+		cardWidth,
 		styles.Palette.Primary,
+		styles.Palette.Accent,
 		styles,
 	)
 
-	rightCol := renderRetroDepartureCard(
+	rightCol := renderFixedDepartureCard(
 		"▼ TRACK 2: CANARSIE-BOUND // ROCKAWAY PKWY",
 		snap.CanarsieTrains,
-		colWidth,
-		styles.Palette.Primary,
+		cardWidth,
 		styles.Palette.Secondary,
+		styles.Palette.Primary,
 		styles,
 	)
 
 	boardContent := lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "  ", rightCol)
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		alertLine,
-		boardContent,
-	)
+	if alertLine != "" {
+		return lipgloss.JoinVertical(lipgloss.Left,
+			alertLine,
+			boardContent,
+		)
+	}
+	return boardContent
 }
 
-func renderRetroDepartureCard(title string, departures []transit.TrainDeparture, width int, headerColor, accentColor lipgloss.Color, styles Styles) string {
+// renderFixedDepartureCard guarantees strict tabular monospace column widths
+// Columns:
+//   SEQ (4 chars: " #01 ")
+//   COUNTDOWN (14 chars: "[  3 MIN     ]" / "[ 42 SEC AWAY]" / "[ BOARDING   ]")
+//   DESTINATION (22 chars)
+//   LIVE TRAIN LOCATION (26 chars)
+//   ARRIVAL TIME (12 chars: "16:54:15 EDT")
+func renderFixedDepartureCard(title string, departures []transit.TrainDeparture, width int, headerColor, accentColor lipgloss.Color, styles Styles) string {
 	var b strings.Builder
 
 	headerBar := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#FFFFFF")).
+		Foreground(styles.Palette.Background).
 		Background(headerColor).
 		Padding(0, 2).
 		Width(width - 4).
@@ -101,8 +113,11 @@ func renderRetroDepartureCard(title string, departures []transit.TrainDeparture,
 		return card
 	}
 
-	b.WriteString(styles.FgMuted.Render(fmt.Sprintf("  %-3s  %-14s  %-24s  %s", "SEQ", "COUNTDOWN", "LIVE TRAIN LOCATION", "ARRIVAL")) + "\n")
-	b.WriteString(styles.FgBorder.Render("  " + strings.Repeat("┄", width-8)) + "\n")
+	// Strictly fixed column header
+	headerRow := fmt.Sprintf("  %-5s %-16s %-22s %-26s %s",
+		"SEQ", "COUNTDOWN", "DESTINATION", "LIVE TRAIN LOCATION", "ARRIVAL")
+	b.WriteString(styles.FgMuted.Render(headerRow) + "\n")
+	b.WriteString(styles.FgBorder.Render("  "+strings.Repeat("┄", width-8)) + "\n")
 
 	count := 0
 	for _, d := range departures {
@@ -111,52 +126,66 @@ func renderRetroDepartureCard(title string, departures []transit.TrainDeparture,
 		}
 		count++
 
-		// Styled outrun countdown pill
-		var badge string
+		// 1. Strictly fixed-width countdown box (16 chars display width)
+		var countdownPill string
 		if d.SecondsAway <= 45 {
-			badge = lipgloss.NewStyle().
+			countdownPill = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("#FFFFFF")).
 				Background(styles.Palette.Alert).
 				Blink(true).
-				Padding(0, 1).
-				Render("⚡ BOARDING ⚡")
+				Render(" [ BOARDING ]   ")
 		} else if d.SecondsAway <= 90 {
-			badge = lipgloss.NewStyle().
+			countdownPill = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#000000")).
+				Foreground(styles.Palette.Background).
 				Background(styles.Palette.Accent).
 				Blink(true).
-				Padding(0, 1).
-				Render(fmt.Sprintf("▶ %2d SEC AWAY", d.SecondsAway))
+				Render(fmt.Sprintf(" [ %2d SEC AWAY ]", d.SecondsAway))
 		} else {
-			badge = lipgloss.NewStyle().
+			countdownPill = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("#000000")).
-				Background(headerColor).
-				Padding(0, 1).
-				Render(fmt.Sprintf("  %2d MIN  ", d.MinutesAway))
+				Foreground(styles.Palette.Background).
+				Background(styles.Palette.Primary).
+				Render(fmt.Sprintf(" [   %2d MIN    ] ", d.MinutesAway))
 		}
 
-		statusDesc := d.CurrentStatus
-		if len(statusDesc) > 22 {
-			statusDesc = statusDesc[:22]
+		// 2. Fixed Destination (truncated or padded to exactly 22 chars)
+		dest := d.Destination
+		if len(dest) > 22 {
+			dest = dest[:22]
 		}
+		destFormatted := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(styles.Palette.Text).
+			Render(fmt.Sprintf("%-22s", dest))
 
-		timeStr := d.ArrivalTime.Format("15:04:05")
+		// 3. Fixed Live Location (truncated or padded to exactly 26 chars)
+		loc := d.CurrentStatus
+		if len(loc) > 26 {
+			loc = loc[:26]
+		}
+		locFormatted := lipgloss.NewStyle().
+			Foreground(styles.Palette.Secondary).
+			Render(fmt.Sprintf("%-26s", loc))
 
-		// Sequential indicator
-		seqGlyph := fmt.Sprintf("#0%d", count)
-		seqStyled := lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render(seqGlyph)
+		// 4. Fixed Arrival Time (12 chars: "16:54:15 EDT")
+		timeStr := d.ArrivalTime.Format("15:04:05 EDT")
+		arrFormatted := styles.FgMuted.Render(fmt.Sprintf("%-12s", timeStr))
 
-		locStyled := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Render(fmt.Sprintf("%-22s", statusDesc))
-		arrStyled := styles.FgMuted.Render(timeStr)
+		// 5. Sequence indicator (5 chars)
+		seqFormatted := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(accentColor).
+			Render(fmt.Sprintf("#0%d  ", count))
 
-		row := fmt.Sprintf("  %s  %-14s  %s  %s",
-			seqStyled,
-			badge,
-			locStyled,
-			arrStyled,
+		// Assemble row with strict spacing: fields will NEVER shift horizontally
+		row := fmt.Sprintf("  %s%s %s %s %s",
+			seqFormatted,
+			countdownPill,
+			destFormatted,
+			locFormatted,
+			arrFormatted,
 		)
 		b.WriteString(row + "\n")
 	}

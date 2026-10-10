@@ -65,18 +65,6 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case themeStr := <-webServer.ThemeChan():
-				var th tui.ThemeType
-				switch themeStr {
-				case "phosphor":
-					th = tui.ThemePhosphor
-				case "amber":
-					th = tui.ThemeAmber
-				default:
-					th = tui.ThemeOutrun
-				}
-				webModel = webModel.SetTheme(th)
-				webServer.UpdateFrame(webModel.ViewWithSnapshot(latestSnap), latestSnap)
 			case snap := <-webChan:
 				latestSnap = snap
 				webServer.UpdateFrame(webModel.ViewWithSnapshot(latestSnap), latestSnap)

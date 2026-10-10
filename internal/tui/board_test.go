@@ -9,7 +9,7 @@ import (
 )
 
 func TestRenderDepartureBoardNominal(t *testing.T) {
-	styles := MakeStyles(PaletteOutrun)
+	styles := MakeStyles(PaletteAmber)
 	snap := transit.TransitSnapshot{
 		Timestamp: time.Now(),
 		ManhattanTrains: []transit.TrainDeparture{
@@ -24,7 +24,7 @@ func TestRenderDepartureBoardNominal(t *testing.T) {
 		IsStale: false,
 	}
 
-	out := RenderDepartureBoard(120, snap, styles)
+	out := RenderDepartureBoard(160, snap, styles)
 	if !strings.Contains(out, "MANHATTAN-BOUND") {
 		t.Errorf("expected header MANHATTAN-BOUND in output")
 	}
@@ -37,7 +37,7 @@ func TestRenderDepartureBoardNominal(t *testing.T) {
 }
 
 func TestRenderDepartureBoardCriticalAlert(t *testing.T) {
-	styles := MakeStyles(PaletteOutrun)
+	styles := MakeStyles(PaletteAmber)
 	snap := transit.TransitSnapshot{
 		Timestamp: time.Now(),
 		ActiveAlerts: []transit.TransitAlert{
@@ -46,21 +46,21 @@ func TestRenderDepartureBoardCriticalAlert(t *testing.T) {
 		IsStale: false,
 	}
 
-	out := RenderDepartureBoard(120, snap, styles)
+	out := RenderDepartureBoard(160, snap, styles)
 	if !strings.Contains(out, "CRITICAL MTA ADVISORY") {
 		t.Errorf("expected critical alert banner in output")
 	}
 }
 
 func TestRenderDepartureBoardStale(t *testing.T) {
-	styles := MakeStyles(PaletteOutrun)
+	styles := MakeStyles(PaletteAmber)
 	snap := transit.TransitSnapshot{
 		Timestamp:       time.Now(),
 		LastSuccessTime: time.Now().Add(-60 * time.Second),
 		IsStale:         true,
 	}
 
-	out := RenderDepartureBoard(120, snap, styles)
+	out := RenderDepartureBoard(160, snap, styles)
 	if !strings.Contains(out, "LIVE FEED DEGRADED") {
 		t.Errorf("expected degraded banner when stale")
 	}
